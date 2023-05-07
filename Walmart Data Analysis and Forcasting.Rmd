@@ -1,0 +1,389 @@
+---
+title: "Walmart Data Analysis and Forecasting"
+author: "Tarek"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# About Dataset
+
+A retail store that has multiple outlets across the country are facing issues in managing the inventory - to match the demand with respect to supply. You are a data scientist, who has to come up with useful insights using the data and make prediction models to forecast the sales for X number of months/years.
+
+# Loading the libraries
+
+```{r Loading the libraries, echo=TRUE, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(purrr)
+library(plotly)
+library(ggplot2)
+library(tidymodels)
+library(highcharter)
+library(formattable)
+library(lubridate)
+library(skimr)
+library(janitor)
+library(xts)
+library(corrplot)
+```
+
+# Loading the dataset
+
+```{r Loading the data, echo=TRUE, message=FALSE, warning=FALSE}
+data = read_csv("Walmart Data Analysis and Forcasting.csv")
+head(data)
+```
+
+# Exploring Data Analysis
+Let's have a look for the data
+
+### Types of the data
+
+we are going to look at the data structure by the following code:
+
+```{r Structure, echo=TRUE, message=FALSE, warning=FALSE}
+str(data)
+```
+we can see that the Date column considered as a character, so we have to make it in a Date Format as it should be 
+
+```{r Date, echo=TRUE, message=FALSE, warning=FALSE}
+df <- data
+
+df$Date <- as.Date(data$Date, format = "%d-%m-%Y")
+
+df$Day <- as.integer(format(as.Date(df$Date), "%d"))
+df$Month <- as.integer(format(as.Date(df$Date), "%m"))
+df$Year <- as.integer(format(as.Date(df$Date), "%Y"))
+# or we can just run this code but it will be as character #df <- separate(df, Date, into = c("Year", "Month", "Day"), sep = "-", remove = FALSE)
+
+df$Month <- month(df$Date, label = TRUE)
+
+df$Temperature_C <- (df$Temperature - 32) * 5/9
+
+
+str(df)
+```
+### Data Summary
+
+```{r Summary, echo=TRUE, message=FALSE, warning=FALSE}
+summary(df)
+```
+### Sales Preview
+
+#### Sales Over the dataset's period
+Let's see how the sales are changing through the period of the data
+```{r sales, echo=TRUE, message=FALSE, warning=FALSE}
+
+df$Date_Formatted <- format(as.Date(df$Date, "%d/%m/%y"), "%Y-%m-%d")
+
+tmp <- df %>% select(Date_Formatted,Weekly_Sales)
+
+tmp$Date_Formatted <- ymd(tmp$Date_Formatted)
+
+time_series <- xts(tmp$Weekly_Sales, order.by = tmp$Date_Formatted)
+
+highchart(type = "stock") %>% 
+  hc_add_series(time_series) %>% 
+  hc_add_theme(hc_theme_bloom()) %>% 
+  hc_title(text = "Total Weekly Sales")
+```
+We clearly notice that there an upside gaps in each of the dates 'Dec 24, 2010' and 'Dec 23, 2011' and also the smaller upside gaps in the dates 'Nov 26, 2010' and 'Nov 25, 2011' and that in order to that these days are holidays
+
+Let's see what are the top stores in average sales during the period of the data set between 2010 and 2012.
+
+#### Sales Over Holidays
+
+```{r Holidays Count,echo=TRUE, message=FALSE, warning=FALSE}
+df %>% 
+  group_by(Year, Holiday_Flag) %>% count()
+```
+
+```{r Average Sales Per Year,echo=TRUE, message=FALSE, warning=FALSE}
+df %>% 
+  group_by(Year, Holiday_Flag) %>%
+  summarise(Avg_Sales = mean(Weekly_Sales))
+
+```
+
+We notice that there are a small difference between average sales in each year. and there a noticeable increase in sales in holidays despite of that the count of the holidays are so few compared to Non-Holidays.
+
+#### Sales Over Years
+
+```{r Yearly Avg Sales, echo=TRUE, warning=FALSE, message=FALSE}
+df %>% 
+  group_by(Year, Holiday_Flag) %>% 
+  summarise(Avg_Sales = mean(Weekly_Sales)) %>% 
+  hchart("column", hcaes(x = Year, y = round(Avg_Sales,2)), dataLabels = list(enabled = TRUE)) %>% 
+  hc_add_theme(hc_theme_bloom()) %>% 
+  hc_title(text = "Average Sales (Yearly)") %>% 
+  hc_xAxis(title = list(text = "Years")) %>% 
+  hc_yAxis(title = list(text = "Average Sales (Yearly)"))
+```
+
+Not let's have a look on monthly sales
+
+#### Sales Over Months Per Year
+
+```{r Monthly Sales, echo=TRUE, message=FALSE, warning=FALSE}
+df %>% 
+  group_by(Month, Weekly_Sales) %>% 
+  filter(Year == 2010) %>% 
+  ggplot(aes(x = Month, y = Weekly_Sales))+
+  geom_boxplot(fill = "steelblue",color = "black",
+               outlier.colour = "red", 
+               outlier.alpha = 0.5)+
+  geom_jitter(width = 0.2, alpha = 0.1, color = "black")+
+  xlab(label = "Month")+
+  ylab(label = "Weekly Sales")+
+  labs(title = "Weekly Sales Per Month",subtitle = "Over The Year 2010")
+
+df %>% 
+  group_by(Month, Weekly_Sales) %>% 
+  filter(Year == 2011) %>% 
+  ggplot(aes(x = Month, y = Weekly_Sales))+
+  geom_boxplot(fill = "steelblue",color = "black",
+               outlier.colour = "red", 
+               outlier.alpha = 0.5)+
+  geom_jitter(width = 0.2, alpha = 0.1, color = "black")+
+  xlab(label = "Month")+
+  ylab(label = "Weekly Sales")+
+  labs(title = "Weekly Sales Per Month",subtitle = "Over The Year 2011")
+
+df %>% 
+  group_by(Month, Weekly_Sales) %>% 
+  filter(Year == 2012) %>% 
+  ggplot(aes(x = Month, y = Weekly_Sales))+
+  geom_boxplot(fill = "steelblue",color = "black",
+               outlier.colour = "red", 
+               outlier.alpha = 0.5)+
+  geom_jitter(width = 0.2, alpha = 0.1, color = "black")+
+  xlab(label = "Month")+
+  ylab(label = "Weekly Sales")+
+  labs(title = "Weekly Sales Per Month",subtitle = "Over The Year 2012")
+
+```
+```{r Monthly Sales 2, echo=TRUE, warning=FALSE, message=FALSE}
+df %>% 
+  group_by(Year, Month) %>% 
+  summarise(Avg_Sales = mean(Weekly_Sales)) %>% 
+  plot_ly(x = ~Month, y = ~Avg_Sales, color = ~factor(Year), type = "scatter", mode = "lines") %>% 
+  layout(title = "Average Monthly Sales Over The Years",
+         xaxis = list(title = "Month"),
+         yaxis = list(title = "Average Sales"),
+         legend = list(title = "Year", x = 1, y = 1))
+```
+
+
+#### Our conclusion about the sales over the period is as follows:
+- December has always the biggest share among other months, and November second.
+- The Average of Sales over the 3 years are near to each other.
+- The sales are decreasing over time.
+
+# Correlation between Sales and Other Features
+
+## Correlation for All Stores
+
+We have several features that we are going to see a correlation between Sales and them (Temperature, Fuel_Price, CPI, Unemployment, Store)
+
+```{r Corr_all, echo=TRUE, warning=FALSE, message=FALSE}
+# Correlation for all stores
+corr_all <- df %>% select(Weekly_Sales,Holiday_Flag,Temperature_C,Fuel_Price,CPI,Unemployment) %>% 
+  cor(use='pairwise.complete.obs', method = "pearson")
+corr_all
+```
+## Correlation Per Store
+
+```{r Corr Per Store, echo=TRUE, warning=FALSE, message=FALSE}
+# Correlation Per Store
+# vector of column names to exclude from correlation analysis
+exclude_cols <- c("Store", "Date", "Day", "Month", "Year", "Date_Formatted", "Temperature")
+
+# empty list to store results
+results <- list()
+
+# loop over unique store values
+for (store in unique(df$Store)) {
+  # filter data for current store
+  store_data <- df %>% filter(Store == store)
+  
+  # empty vector to store correlation coefficients
+  correlations <- vector()
+  
+  # loop over columns and calculate correlation with Weekly_Sales
+  for (col in names(store_data)) {
+    if (!(col %in% exclude_cols)) {
+      corr <- cor(store_data$Weekly_Sales, store_data[[col]])
+      correlations <- c(correlations, corr)
+    }
+  }
+  
+  # add correlations to results list
+  results[[store]] <- correlations
+}
+
+# convert results list to data frame
+results_df <- data.frame(matrix(unlist(results), nrow=length(results[[1]]), byrow=FALSE))
+
+# add column names to results data frame
+rownames(results_df) <- colnames(df)[!names(df) %in% exclude_cols]
+colnames(results_df) <- paste("Store",unique(df$Store))
+results_df
+
+```
+
+```{r Corr Per Store2, echo=TRUE, warning=FALSE, message=FALSE}
+results_df_long <- t(results_df)
+
+results_df_long <- as.data.frame(results_df_long)
+
+results_df_long <- cbind(Store = rownames(results_df_long), results_df_long)
+
+rownames(results_df_long) <- NULL
+
+head(results_df_long)
+
+```
+
+## Plotting the Correlations Per Store
+
+```{r Corr Per Store 3, echo=TRUE, warning=FALSE, message=FALSE}
+results_df_long %>% 
+  hchart("bar", hcaes(x = Store, y = Holiday_Flag)) %>% 
+  hc_add_theme(hc_theme_bloom()) %>% 
+  hc_subtitle(text = "Comparison of Correlation Ratio by Store and Predictor") %>% 
+  hc_title(text = "Correlation Ratio of Holiday Flag")
+
+results_df_long %>% 
+  hchart("bar", hcaes(x = Store, y = Fuel_Price)) %>% 
+  hc_add_theme(hc_theme_bloom()) %>% 
+  hc_subtitle(text = "Comparison of Correlation Ratio by Store and Predictor") %>% 
+  hc_title(text = "Correlation Ratio of Fuel Price")
+
+results_df_long %>% 
+  hchart("bar", hcaes(x = Store, y = CPI)) %>% 
+  hc_add_theme(hc_theme_bloom()) %>% 
+  hc_subtitle(text = "Comparison of Correlation Ratio by Store and Predictor") %>% 
+  hc_title(text = "Correlation Ratio Of CPI")
+
+results_df_long %>% 
+  hchart("bar", hcaes(x = Store, y = Unemployment)) %>% 
+  hc_add_theme(hc_theme_bloom()) %>% 
+  hc_subtitle(text = "Comparison of Correlation Ratio by Store and Predictor") %>% 
+  hc_title(text = "Correlation Ratio of Unemployment")
+
+results_df_long %>% 
+  hchart("bar", hcaes(x = Store, y = Temperature_C)) %>% 
+  hc_add_theme(hc_theme_bloom()) %>% 
+  hc_subtitle(text = "Comparison of Correlation Ratio by Store and Predictor") %>% 
+  hc_title(text = "Correlation Ratio of Temperature in C.")
+
+```
+
+## Our Conclusion about the Correlations of the predictors with each store, as follows:
+- Holiday Flag: Most of the stores has positive correlated with Holidays, but we can see that there are some stores are not.
+- Fuel Price: We can't say that the fuel price is a major driver for the sales of the stores, except for 2 stores who are correlated with it with a ratio above '0.5' like store no.38 with correlation 0.6972 and store no.44 with correlation 0.6074 which we need to dive deep for the reason but we don't have enough data to do so.
+- CPI: Clearly it's a has good correlation with most of the stores especially with store no.38 with correlation 0.8128 and store no.44 with correlation 0.7401
+- Unemployment: the correlation results was as expected.
+- Temperature: Clearly have a negative correlation with sales stores, especially for store no.10 with correlation -0.4325
+
+## Correlation clustering
+
+```{r corr2, echo=TRUE, warning=FALSE, message=FALSE}
+col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
+
+corrplot(corr_all, method = "color", col = col(200),  
+         type = "upper", order = "hclust", 
+         addCoef.col = "black", # Add coefficient of correlation
+         tl.col = "steelblue", tl.srt = 45, #Text label color and rotation
+)
+```
+
+Now after we have a good and wide look at the data and its correlations and relationships, let's do the predictions using some models and show which are the best among them.
+
+# Model Selection:
+
+## Simple Linear Regression
+
+```{r SLM, echo=TRUE, warning=FALSE, message=FALSE}
+slm1 <- lm(Weekly_Sales ~ Holiday_Flag, data = df)
+slm2 <- lm(Weekly_Sales ~ Fuel_Price, data = df)
+slm3 <- lm(Weekly_Sales ~ CPI, data = df)
+slm4 <- lm(Weekly_Sales ~ Unemployment, data = df)
+slm5 <- lm(Weekly_Sales ~ Temperature_C, data = df)
+
+paste("R-MSE1 is: ", sqrt(mean(slm1$residuals^2)), "and R-Squared is: ", summary(slm1)$r.squared)
+paste("R-MSE2 is: ", sqrt(mean(slm2$residuals^2)), "and R-Squared is: ", summary(slm2)$r.squared)
+paste("R-MSE3 is: ", sqrt(mean(slm3$residuals^2)), "and R-Squared is: ", summary(slm3)$r.squared)
+paste("R-MSE4 is: ", sqrt(mean(slm4$residuals^2)), "and R-Squared is: ", summary(slm4)$r.squared)
+paste("R-MSE5 is: ", sqrt(mean(slm5$residuals^2)), "and R-Squared is: ", summary(slm5)$r.squared)
+
+pred1 <- predict(slm1, interval = "confidence")
+```
+Where are the highest R-squared and lowest rMSE? it's the best model here
+
+## Multiple Linear Regression
+
+```{r MLR, echo=TRUE, warning=FALSE, message=FALSE}
+mlr_all <- lm(Weekly_Sales ~ Holiday_Flag + Fuel_Price + CPI + Unemployment + Temperature_C, data = df)
+
+paste("The MSE of the MLR Model is: ",mean(mlr_all$residuals^2))
+paste("The R-MSE of the MLR Model is: ",sqrt(mean(mlr_all$residuals^2)))
+paste("The R-Squared of the MLR Model is: ",summary(mlr_all)$r.squared)
+```
+
+We can say that both of Simple and Multiple linear regression has a very small r-squared value that indicates that these two models not performing the data well.
+Let's Plot the regression
+
+### Regression Plot
+
+```{r Reg.plot, echo=TRUE, message=FALSE, warning=FALSE}
+p1 <- ggplot(df, aes(x = CPI, y = Weekly_Sales))+
+  geom_point()+
+  geom_smooth(method = "lm", col = "red")
+
+p2 <- ggplot(df, aes(x = Unemployment, y = Weekly_Sales))+
+  geom_point()+
+  geom_smooth(method = "lm", col = "red")
+
+p3 <- ggplot(df, aes(x = Fuel_Price, y = Weekly_Sales))+
+  geom_point()+
+  geom_smooth(method = "lm", col = "red")
+
+p4 <- ggplot(df, aes(x = Temperature_C, y = Weekly_Sales))+
+  geom_point()+
+  geom_smooth(method = "lm", col = "red")
+
+p5 <- ggplot(df, aes(x = Holiday_Flag, y = Weekly_Sales))+
+  geom_point()+
+  geom_smooth(method = "lm", col = "red")
+
+grid.arrange(p1,p2,p3,p4,p5, ncol=2)
+```
+and that confirmed our conclusion that the correlation is very weak.
+
+### Residuals Plot
+
+```{r Res.plot, echo=TRUE, warning=FALSE, message=FALSE}
+score_model <- lm(Weekly_Sales ~ Holiday_Flag + Fuel_Price + CPI + Unemployment + Temperature_C, data = df)
+df_pred <- df
+df_pred$predicted <- predict(score_model)
+
+pr1 <- ggplot(df_pred, aes(x = Unemployment, y = Weekly_Sales)) +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +  # Plot regression slope
+  geom_segment(aes(xend = Unemployment, yend = predicted), alpha = .2) +  # alpha to fade lines
+  geom_point() +
+  geom_point(aes(y = predicted), shape = 1) +
+  theme_bw() 
+
+pr2 <- ggplot(lm(Weekly_Sales ~ Unemployment, data = df_pred)) +
+  geom_point(aes(x=Unemployment, y=.resid))
+
+grid.arrange(pr1,pr2, ncol=1)
+
+```
+
