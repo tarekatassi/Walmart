@@ -27,7 +27,7 @@ import tempfile
 from pathlib import Path
 
 from sleep_analysis import build_report, build_sessions, parse_export
-from sleep_analysis import plots
+from sleep_analysis import dashboard
 from sleep_analysis.sample_data import generate_export
 
 
@@ -87,12 +87,17 @@ def main(argv: list[str] | None = None) -> int:
     sessions.to_csv(out_dir / "sleep_sessions.csv", index=False)
 
     if not args.no_plots:
-        written = plots.generate_all(sessions, out_dir, window=args.window)
-        for w in written:
+        # build_dashboard renders the charts and bundles them, the summary,
+        # the weekday table and observations into a single index.html.
+        html_path = dashboard.build_dashboard(sessions, out_dir, window=args.window)
+        for w in sorted(out_dir.glob("*.png")):
             print(f"  chart: {w}")
+        print(f"  dashboard: {html_path}")
 
     print("\n" + report)
-    print(f"\nDone. Report, CSV and charts written to {out_dir}/")
+    print(f"\nDone. Output written to {out_dir}/")
+    if not args.no_plots:
+        print(f"Open the dashboard:  {out_dir / 'index.html'}")
     return 0
 
 

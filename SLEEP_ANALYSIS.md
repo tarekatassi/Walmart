@@ -54,7 +54,15 @@ python analyze_sleep.py --demo
 ```
 
 Outputs are written to `sleep_output/` (override with `--out`):
-`sleep_report.md`, `sleep_sessions.csv`, and the PNG charts above.
+
+- **`index.html`** — a self-contained **dashboard** that bundles the summary
+  metrics, all charts, the weekday table and observations into one page. Charts
+  are embedded as base64, so the file is fully portable: open it offline, email
+  it, or drop it on a static host — no companion files needed. Open it with
+  `open sleep_output/index.html` (macOS).
+- `sleep_report.md` — the same summary as plain Markdown
+- `sleep_sessions.csv` — one row per night for your own analysis
+- the PNG charts above
 
 ### Options
 

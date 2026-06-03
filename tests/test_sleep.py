@@ -9,7 +9,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from sleep_analysis import analysis, plots
+from sleep_analysis import analysis, dashboard, plots
 from sleep_analysis.parser import parse_export
 from sleep_analysis.sample_data import generate_export
 from sleep_analysis.sessions import _merge_minutes, build_sessions
@@ -126,3 +126,15 @@ def test_plots_written(sessions, tmp_path):
     assert len(written) >= 3
     for p in written:
         assert p.exists() and p.stat().st_size > 0
+
+
+def test_dashboard_is_self_contained(sessions, tmp_path):
+    out = dashboard.build_dashboard(sessions, tmp_path)
+    assert out.name == "index.html"
+    html = out.read_text(encoding="utf-8")
+    # Charts must be embedded (portable single file), not external links.
+    assert "data:image/png;base64," in html
+    assert "Sleep Dashboard" in html
+    assert "By day of week" in html
+    # Headline numbers should be rendered into the cards.
+    assert "Sleep efficiency" in html
