@@ -49,6 +49,20 @@ def test_parse_missing_file():
         parse_export("/nope/does_not_exist.xml")
 
 
+def test_regex_fallback_on_grep_slice(export_xml, tmp_path):
+    # Simulate `grep ...SleepAnalysis export.xml > slice.xml`: a file with only
+    # the sleep Record lines and no enclosing root element (not valid XML).
+    slice_path = tmp_path / "sleep_only.xml"
+    with open(export_xml) as fin, open(slice_path, "w") as fout:
+        for line in fin:
+            if "HKCategoryTypeIdentifierSleepAnalysis" in line:
+                fout.write(line)
+    df = parse_export(slice_path)  # must succeed via the regex fallback
+    # Same record count as parsing the full, well-formed export.
+    assert len(df) == len(parse_export(export_xml))
+    assert df["is_asleep"].any()
+
+
 def test_sessions_built(sessions):
     assert not sessions.empty
     # ~one main sleep per night.

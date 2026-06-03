@@ -16,6 +16,7 @@ memory, keep only the sleep records, and return them as a DataFrame.
 
 from __future__ import annotations
 
+import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -43,6 +44,47 @@ def _short_stage(value: str) -> str:
     return STAGE_MAP.get(value, value.replace("HKCategoryValueSleepAnalysis", ""))
 
 
+def _row_from_attrs(attrs: dict) -> dict:
+    start_raw = attrs.get("startDate")
+    end_raw = attrs.get("endDate")
+    return {
+        "start": start_raw,
+        "end": end_raw,
+        "start_raw": start_raw,
+        "end_raw": end_raw,
+        "stage": _short_stage(attrs.get("value", "")),
+        "source": attrs.get("sourceName", ""),
+    }
+
+
+def _parse_with_iterparse(xml_path: Path) -> list[dict]:
+    """Stream a well-formed export.xml; memory stays flat regardless of size."""
+    rows: list[dict] = []
+    for _event, elem in ET.iterparse(str(xml_path), events=("end",)):
+        if elem.tag == "Record" and elem.get("type") == SLEEP_TYPE:
+            rows.append(_row_from_attrs(elem.attrib))
+        elem.clear()
+    return rows
+
+
+# Pull attribute="value" pairs out of a single <Record ...> tag.
+_ATTR_RE = re.compile(r'(\w+)="([^"]*)"')
+
+
+def _parse_with_regex(xml_path: Path) -> list[dict]:
+    """Scan line by line for sleep <Record> tags. Tolerates a non-well-formed
+    file (e.g. a grep-extracted slice with no root element)."""
+    rows: list[dict] = []
+    with open(xml_path, encoding="utf-8", errors="replace") as f:
+        for line in f:
+            if SLEEP_TYPE not in line:
+                continue
+            attrs = dict(_ATTR_RE.findall(line))
+            if attrs.get("type") == SLEEP_TYPE and attrs.get("startDate"):
+                rows.append(_row_from_attrs(attrs))
+    return rows
+
+
 def parse_export(xml_path: str | Path) -> pd.DataFrame:
     """Read ``export.xml`` and return one row per sleep record.
 
@@ -60,25 +102,14 @@ def parse_export(xml_path: str | Path) -> pd.DataFrame:
             "the file you want is named 'export.xml'."
         )
 
-    rows: list[dict] = []
-    # iterparse + clear() keeps memory flat regardless of file size.
-    for _event, elem in ET.iterparse(str(xml_path), events=("end",)):
-        if elem.tag != "Record" or elem.get("type") != SLEEP_TYPE:
-            elem.clear()
-            continue
-        start_raw = elem.get("startDate")
-        end_raw = elem.get("endDate")
-        rows.append(
-            {
-                "start": start_raw,
-                "end": end_raw,
-                "start_raw": start_raw,
-                "end_raw": end_raw,
-                "stage": _short_stage(elem.get("value", "")),
-                "source": elem.get("sourceName", ""),
-            }
-        )
-        elem.clear()
+    try:
+        rows = _parse_with_iterparse(xml_path)
+    except ET.ParseError:
+        # The file isn't a complete, well-formed XML document. This is exactly
+        # what you get from a `grep`-extracted slice of a huge export (no root
+        # element, possibly a truncated final line). Fall back to scanning each
+        # <Record .../> line with a regex, which doesn't care about structure.
+        rows = _parse_with_regex(xml_path)
 
     if not rows:
         raise ValueError(
