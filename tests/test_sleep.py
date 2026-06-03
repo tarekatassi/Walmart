@@ -75,6 +75,30 @@ def test_sessions_built(sessions):
     assert (main["asleep_min"] <= main["time_in_bed_min"] + 1e-6).all()
 
 
+def test_asleep_not_clobbered_by_unspecified_stage(tmp_path):
+    # Regression: Apple's "AsleepUnspecified" maps to the label "Asleep", whose
+    # stage column must NOT overwrite the headline total `asleep_min`. This
+    # night mixes a staged Core block with an unspecified-asleep block.
+    xml = tmp_path / "mixed.xml"
+    xml.write_text(
+        '<?xml version="1.0" encoding="UTF-8"?>\n<HealthData>\n'
+        '<Record type="HKCategoryTypeIdentifierSleepAnalysis" sourceName="W" '
+        'startDate="2024-03-01 23:00:00 -0500" endDate="2024-03-02 01:00:00 -0500" '
+        'value="HKCategoryValueSleepAnalysisAsleepCore"/>\n'
+        '<Record type="HKCategoryTypeIdentifierSleepAnalysis" sourceName="W" '
+        'startDate="2024-03-02 01:00:00 -0500" endDate="2024-03-02 02:00:00 -0500" '
+        'value="HKCategoryValueSleepAnalysisAsleepUnspecified"/>\n'
+        "</HealthData>\n",
+        encoding="utf-8",
+    )
+    s = build_sessions(parse_export(xml))
+    row = s.iloc[0]
+    # 2h Core + 1h unspecified = 3h total asleep, regardless of stage columns.
+    assert row["asleep_min"] == pytest.approx(180.0)
+    assert row["stage_core_min"] == pytest.approx(120.0)
+    assert row["stage_asleep_min"] == pytest.approx(60.0)
+
+
 def test_summary_stats(sessions):
     s = analysis.summary_stats(sessions)
     assert s["nights"] >= 35

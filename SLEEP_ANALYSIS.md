@@ -60,12 +60,31 @@ Outputs are written to `sleep_output/` (override with `--out`):
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
-| `--input`, `-i` | — | Path to `export.xml` |
+| `--input`, `-i` | — | Path to `export.xml` (or a `grep`-extracted slice — see below) |
 | `--demo` | — | Generate and analyze 60 nights of sample data |
 | `--out`, `-o` | `sleep_output` | Output directory |
+| `--since` | — | Only analyse nights on/after `YYYY-MM-DD` (e.g. skip years before you wore a sleep tracker) |
 | `--gap-hours` | `3.0` | Gap that separates two sleep sessions |
 | `--window` | `7` | Rolling-average window (nights) |
 | `--no-plots` | off | Skip chart generation |
+
+> Nights with **no recorded sleep** (an "In Bed" window but zero measured
+> sleep — common before you owned a sleep tracker) are automatically excluded
+> from the averages, and the count of excluded nights is noted in the report.
+
+### Huge exports: analyse without moving the whole file
+
+Apple's `export.xml` includes *all* health data and can be several GB. The
+sleep records are a tiny slice you can pull out locally — no Python needed:
+
+```bash
+# macOS / Linux, from the folder containing export.xml
+grep 'HKCategoryTypeIdentifierSleepAnalysis' export.xml > sleep_only.xml
+```
+
+`sleep_only.xml` will be a few MB. It isn't a complete XML document (no root
+element), but `analyze_sleep.py` detects that and falls back to a line-by-line
+parser, so you can point `--input` straight at it.
 
 ## Use it as a library
 

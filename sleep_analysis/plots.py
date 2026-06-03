@@ -80,10 +80,10 @@ def plot_weekday(sessions, out_dir: Path) -> Path:
 def plot_stages(sessions, out_dir: Path) -> Path | None:
     """Average minutes per sleep stage (skipped if no staged data exists)."""
     stages = analysis.stage_breakdown(sessions)
-    if stages.empty or (len(stages) == 1 and "asleep_min" in stages.index):
+    if stages.empty or (len(stages) == 1 and "stage_asleep_min" in stages.index):
         return None  # only undifferentiated "Asleep" data — nothing to break down
     fig, ax = plt.subplots(figsize=(6, 6))
-    labels = [s.replace("_min", "").upper() for s in stages.index]
+    labels = [analysis.stage_label(s) for s in stages.index]
     ax.pie(stages.values, labels=labels, autopct="%1.0f%%", startangle=90,
            colors=["#3a0ca3", "#4361ee", "#4cc9f0", "#b5179e"][: len(stages)])
     ax.set_title("Average time per sleep stage")

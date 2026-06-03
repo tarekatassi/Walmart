@@ -112,10 +112,13 @@ def build_sessions(df: pd.DataFrame, gap_hours: float = 3.0) -> pd.DataFrame:
             "n_awakenings": int((g["stage"] == "Awake").sum()),
             "source": g["source"].mode().iloc[0] if not g["source"].mode().empty else "",
         }
+        # Per-stage minutes. Namespaced with a "stage_" prefix so a stage label
+        # (e.g. Apple's unspecified "Asleep") can never collide with a headline
+        # metric column such as "asleep_min".
         for stage in all_stages:
             sg = g[g["stage"] == stage]
             ivals = list(zip(_epoch_seconds(sg["start"]), _epoch_seconds(sg["end"])))
-            row[f"{stage.lower()}_min"] = round(_merge_minutes(ivals), 1)
+            row[f"stage_{stage.lower()}_min"] = round(_merge_minutes(ivals), 1)
         records.append(row)
 
     sessions = pd.DataFrame(records).sort_values("bedtime").reset_index(drop=True)

@@ -24,9 +24,28 @@ def _fmt_clock(decimal_hour: float) -> str:
     return f"{h:02d}:{m:02d}"
 
 
-def main_sleep(sessions: pd.DataFrame) -> pd.DataFrame:
-    """Just the main (longest) sleep per night — the basis for nightly trends."""
-    return sessions[sessions["is_main"]].copy()
+def stage_label(col: str) -> str:
+    """'stage_rem_min' -> 'REM'."""
+    return col.replace("stage_", "").replace("_min", "").upper()
+
+
+def main_sleep(sessions: pd.DataFrame, require_sleep: bool = True) -> pd.DataFrame:
+    """The main (longest) sleep per night — the basis for nightly trends.
+
+    By default excludes nights with **no recorded sleep** (``asleep_min == 0``),
+    which are bedtime-schedule artifacts (e.g. an iPhone "In Bed" window from
+    before sleep tracking existed) rather than measured sleep.
+    """
+    main = sessions[sessions["is_main"]]
+    if require_sleep:
+        main = main[main["asleep_min"] > 0]
+    return main.copy()
+
+
+def excluded_nights(sessions: pd.DataFrame) -> int:
+    """How many main nights were dropped for having no recorded sleep."""
+    main = sessions[sessions["is_main"]]
+    return int((main["asleep_min"] == 0).sum())
 
 
 def summary_stats(sessions: pd.DataFrame) -> dict:
@@ -70,16 +89,17 @@ def weekday_breakdown(sessions: pd.DataFrame) -> pd.DataFrame:
 
 
 def stage_breakdown(sessions: pd.DataFrame) -> pd.Series:
-    """Average minutes per sleep stage across main sleeps (only stages present)."""
+    """Average minutes per sleep stage across main sleeps (only stages present).
+
+    Prefers true staged data (REM/Deep/Core); falls back to Apple's
+    undifferentiated "Asleep" stage when that's all a device recorded.
+    """
     main = main_sleep(sessions)
-    stage_cols = [c for c in ("rem_min", "deep_min", "core_min", "asleep_min")
-                  if c in main.columns]
-    # Prefer staged data (REM/Deep/Core); fall back to undifferentiated Asleep.
-    present = [c for c in ("rem_min", "deep_min", "core_min") if c in main.columns
-               and main[c].sum() > 0]
-    if not present and "asleep_min" in main.columns:
-        present = ["asleep_min"]
-    return main[present].mean()
+    present = [c for c in ("stage_rem_min", "stage_deep_min", "stage_core_min")
+               if c in main.columns and main[c].sum() > 0]
+    if not present and "stage_asleep_min" in main.columns:
+        present = ["stage_asleep_min"]
+    return main[present].mean() if present else pd.Series(dtype=float)
 
 
 def rolling_trend(sessions: pd.DataFrame, window: int = 7) -> pd.DataFrame:
@@ -96,12 +116,19 @@ def build_report(sessions: pd.DataFrame, window: int = 7) -> str:
     s = summary_stats(sessions)
     wd = weekday_breakdown(sessions)
     stages = stage_breakdown(sessions)
+    skipped = excluded_nights(sessions)
 
     lines = [
         "# Sleep Analysis Summary",
         "",
         f"- Nights analysed: **{s['nights']}** "
-        f"({s['date_from']:%Y-%m-%d} to {s['date_to']:%Y-%m-%d})",
+        f"({s['date_from']:%Y-%m-%d} to {s['date_to']:%Y-%m-%d})",]
+    if skipped:
+        lines.append(
+            f"- _(Excluded {skipped} nights with no recorded sleep — e.g. "
+            "bedtime windows logged before sleep tracking was on.)_"
+        )
+    lines += [
         f"- Average time asleep: **{_fmt_hm(s['avg_asleep_min'])}** "
         f"(median {_fmt_hm(s['median_asleep_min'])}, "
         f"±{_fmt_hm(s['std_asleep_min'])} night to night)",
@@ -117,7 +144,7 @@ def build_report(sessions: pd.DataFrame, window: int = 7) -> str:
         "## Sleep stages (avg per night)",
     ]
     for name, val in stages.items():
-        lines.append(f"- {name.replace('_min', '').upper()}: {_fmt_hm(val)}")
+        lines.append(f"- {stage_label(name)}: {_fmt_hm(val)}")
 
     lines += ["", "## By day of week", "", "| Day | Nights | Avg asleep | Avg bedtime | Efficiency |", "| --- | --- | --- | --- | --- |"]
     for day, row in wd.iterrows():

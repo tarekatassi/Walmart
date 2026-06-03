@@ -45,6 +45,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--out", "-o", default="sleep_output",
                    help="Output directory (default: sleep_output)")
+    p.add_argument("--since", default=None, metavar="YYYY-MM-DD",
+                   help="Only analyse nights on/after this date (e.g. to skip "
+                        "early years before you wore a sleep tracker)")
     p.add_argument("--gap-hours", type=float, default=3.0,
                    help="Gap that separates two sleep sessions (default: 3.0)")
     p.add_argument("--window", type=int, default=7,
@@ -69,6 +72,10 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"  found {len(df):,} sleep records")
     sessions = build_sessions(df, gap_hours=args.gap_hours)
+    if args.since:
+        before = len(sessions)
+        sessions = sessions[sessions["date"] >= args.since].reset_index(drop=True)
+        print(f"  --since {args.since}: kept {len(sessions)} of {before} sessions")
     n_main = int(sessions["is_main"].sum()) if not sessions.empty else 0
     print(f"  reconstructed {len(sessions)} sessions across {n_main} nights")
 
